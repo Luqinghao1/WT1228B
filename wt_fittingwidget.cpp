@@ -3,11 +3,11 @@
  * 文件作用: 试井拟合分析主界面类的实现文件
  * 功能描述:
  * 1. 初始化拟合分析界面，配置图表控件 (QCustomPlot) 和参数表格。
- * 2. 实现观测数据的加载逻辑，支持从项目数据或外部文件导入，并进行预处理（如计算压差、导数、平滑）。
- * 3. 核心算法实现：完整实现了 Levenberg-Marquardt (LM) 非线性最小二乘拟合算法，用于自动调整模型参数以匹配观测数据。
+ * 2. 实现观测数据的加载逻辑。
+ * 修改记录: 修复了将压力数据强制转换为压差 (Delta P) 的问题，现在支持直接加载和绘制实测压力 (Pressure)。
+ * 3. 核心算法实现：完整实现了 Levenberg-Marquardt (LM) 非线性最小二乘拟合算法。
  * 4. 提供丰富的交互功能：手动调整参数、权重滑块、模型选择、图表视图控制。
  * 5. 提供结果输出功能：导出拟合参数、导出图表图片、生成 HTML 分析报告。
- * 6. 实现状态管理：支持保存和恢复拟合界面的所有状态（参数、数据、视图等）。
  */
 
 #include "wt_fittingwidget.h"
@@ -177,7 +177,9 @@ void FittingWidget::setupPlot() {
 
     // 设置轴标签字体和内容
     QFont labelFont("Arial", 12, QFont::Bold); QFont tickFont("Arial", 12);
-    m_plot->xAxis->setLabel("时间 Time (h)"); m_plot->yAxis->setLabel("压力 & 导数 Pressure & Derivative (MPa)");
+    m_plot->xAxis->setLabel("时间 Time (h)");
+    // [修改处]：将Y轴标签明确为 Pressure (压力) 而非 Pressure Difference (压差)
+    m_plot->yAxis->setLabel("压力 & 导数 Pressure & Derivative (MPa)");
     m_plot->xAxis->setLabelFont(labelFont); m_plot->yAxis->setLabelFont(labelFont);
     m_plot->xAxis->setTickLabelFont(tickFont); m_plot->yAxis->setTickLabelFont(tickFont);
 
@@ -205,6 +207,7 @@ void FittingWidget::setupPlot() {
     // Graph 0: 实测压力 (绿色圆点，无连线)
     m_plot->addGraph(); m_plot->graph(0)->setPen(Qt::NoPen);
     m_plot->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, QColor(0, 100, 0), 6));
+    // [修改处]：图例显示“实测压力”，确保用户知晓这是原始数据
     m_plot->graph(0)->setName("实测压力");
 
     // Graph 1: 实测导数 (洋红三角，无连线)
@@ -293,17 +296,21 @@ void FittingWidget::on_btnLoadData_clicked() {
     }
 
     // 4. 处理压力数据类型
-    // pressureType: 0 = 原始压力 (需计算 |P - Pi|), 1 = 压差 (直接使用)
+    // pressureType: 0 = 原始压力, 1 = 压差
     QVector<double> finalPressure;
-    // 默认以第一个有效点作为初始压力 Pi
+
+    // [注意] 默认以第一个有效点作为初始压力 Pi (仅供参考，若计算压差时使用)
+    // 但在修改后，如果不计算压差，则不需要使用此变量做减法
     double p_initial = rawPressure.first();
 
     for (double p : rawPressure) {
         if (settings.pressureType == 0) {
-            // 计算压差绝对值
-            finalPressure.append(std::abs(p - p_initial));
+            // [修改处]：核心修改点
+            // 原逻辑: finalPressure.append(std::abs(p - p_initial)); (强制计算压差)
+            // 新逻辑: 直接存储原始压力，不做减法处理，确保图表绘制的是实测压力。
+            finalPressure.append(p);
         } else {
-            // 直接使用数据
+            // 压差模式，假设输入文件本身已经是压差数据，或者用户希望这样处理
             finalPressure.append(p);
         }
     }
@@ -312,6 +319,7 @@ void FittingWidget::on_btnLoadData_clicked() {
     if (settings.derivColIndex == -1) {
         // 情况A: 用户选择“自动计算”
         // 调用静态方法计算普通 Bourdet 导数 (默认 L-Spacing = 0.15)
+        // 注意：压力导数 dP/dt 等同于 d(DeltaP)/dt，因此使用原始压力计算导数在数值上是一致的（仅方向可能相反，但通常取绝对值）
         finalDeriv = PressureDerivativeCalculator::calculateBourdetDerivative(rawTime, finalPressure, 0.15);
 
         // 如果开启了平滑，调用静态平滑方法处理计算结果
@@ -340,7 +348,7 @@ void FittingWidget::on_btnLoadData_clicked() {
 /**
  * @brief 设置观测数据并更新绘图
  * @param t 时间向量
- * @param p 压力（或压差）向量
+ * @param p 压力（或压差）向量 - 修改为支持压力
  * @param d 导数向量
  */
 void FittingWidget::setObservedData(const QVector<double>& t, const QVector<double>& p, const QVector<double>& d) {

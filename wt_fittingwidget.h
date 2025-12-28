@@ -2,10 +2,10 @@
  * 文件名: wt_fittingwidget.h
  * 文件作用: 试井拟合分析主界面类的头文件
  * 功能描述:
- * 1. 定义拟合分析界面的主要控件和布局逻辑。
- * 2. 声明用于非线性回归拟合的核心算法函数（LM算法）。
- * 3. 管理观测数据、模型参数以及绘图对象。
- * 4. 提供与外部（如主窗口、模型管理器）的交互接口。
+ * 1. 定义拟合分析界面的主要控件成员变量和布局逻辑。
+ * 2. 声明用于Levenberg-Marquardt非线性回归拟合的核心算法函数。
+ * 3. 声明观测数据（时间、压力、导数）的管理函数。
+ * 4. 提供与外部模块（如主窗口、模型管理器）的交互接口。
  */
 
 #ifndef WT_FITTINGWIDGET_H
@@ -42,6 +42,7 @@ public:
     void setProjectDataModel(QStandardItemModel* model);
 
     // 设置观测数据（时间、压力、导数）并更新绘图
+    // [注意]: 修改后，这里的压力应为实测压力，而非计算后的压差
     void setObservedData(const QVector<double>& t, const QVector<double>& p, const QVector<double>& d);
 
     // 更新基础参数（预留接口，用于同步孔渗饱等物性参数）
@@ -128,7 +129,7 @@ private:
 
     // 本地存储的观测数据
     QVector<double> m_obsTime;             // 观测时间
-    QVector<double> m_obsPressure;         // 观测压力（或压差）
+    QVector<double> m_obsPressure;         // 观测压力（修改：现存储实测压力）
     QVector<double> m_obsDerivative;       // 观测导数
 
     // 拟合任务控制状态
